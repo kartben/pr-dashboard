@@ -71,6 +71,7 @@
       })();
 
       prs = null;
+      users = null;
       lastDatasetUpdate = null;
 
       function saveGHUser(name) {
@@ -209,7 +210,39 @@
             { title: "Base", responsivePriority: 200 },
             {
               title: "Updated",
-              render: (data, type, row) => (type == "display" ? timeSince(data) : data),
+              render: (data, type, row) => {
+                if (type == "display") {
+                  let result = timeSince(data);
+                  const currentUser = new URLSearchParams(window.location.search).get("username");
+                  if (
+                    currentUser &&
+                    users &&
+                    users[currentUser] &&
+                    users[currentUser].last_action
+                  ) {
+                    const prKey = `${row[12]}/${row[0]}`;
+                    const userLastAction = users[currentUser].last_action[prKey];
+                    if (userLastAction) {
+                      // User has engaged before and hasn't approved - check if PR was updated since
+                      // their last action
+                      const userLastActionTime = moment(userLastAction);
+                      const prLastUpdateTime = moment(data);
+                      if (prLastUpdateTime.isAfter(userLastActionTime) && !row[5].includes(currentUser)) {
+                        result += ` <i class="bi bi-bell-fill"></i>`;
+                      }
+                    } else {
+                      // User has never engaged with this PR but they should have (they're assignee
+                      // or reviewer... and not the author)
+                      if (row[2] !== currentUser &&
+                          (row[3].includes(currentUser) || row[4].includes(currentUser))) {
+                        result += ` <i class="bi bi-bell-fill"></i>`;
+                      }
+                    }
+                  }
+                  return result;
+                }
+                return data;
+              },
               responsivePriority: 6,
             },
             { title: "Status", visible: false },
@@ -306,7 +339,7 @@
 
       function processData(data) {
         prs = data[0];
-        const users = data[1];
+        users = data[1];
         const urlParams = new URLSearchParams(window.location.search);
         const username = urlParams.get("username");
 
@@ -536,6 +569,7 @@
           </li>
           <li><span class="badge bg-secondary">?</span> Unknown status</li>
           <li><i class="bi bi-file-earmark-text"></i> CI-built documentation</li>
+          <li><i class="bi bi-bell-fill"></i> New activity or never engaged</li>
         </ul>
       </div>
     </div>
